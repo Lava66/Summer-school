@@ -104,6 +104,10 @@ real(dp), dimension(nz  ) :: uwind, &  ! [m s-1], u component of wind
                              theta     ! [K], potential temperature
 real(dp), dimension(nz  ) :: temp, &   ! [K], air temperature
                              pres      ! [Pa], air pressure
+							 
+real(dp), dimension(nz  ) :: km,&	   ! 
+							 kh		   !						 
+
 
 integer :: i, j  ! used for loops
 
@@ -122,6 +126,7 @@ call write_files(time)   ! write initial values
 !-----------------------------------------------------------------------------------------
 ! Start main loop
 !-----------------------------------------------------------------------------------------
+
 do while (time <= time_end)
   !---------------------------------------------------------------------------------------
   ! Meteorology
@@ -129,8 +134,18 @@ do while (time <= time_end)
   ! Set lower boundary condition
   call surface_values(theta(1), time+dt)  ! theta = temperature at the surface
 
-  ! Update meteorology
-
+  ! version 1
+  km = 5.0
+  kh = 5.0
+  
+  ! Note:: here km(i+1) means km(i+0.5)
+  do i = 2,nz-1
+	uwind(i) = uwind(i) + (fcor *(vwind(i) - vg) + (km(i+1) * (uwind(i+1) - uwind(i))/(hh(i+1)-hh(i)) - km(i) * (uwind(i)-uwind(i-1))/(hh(i)-hh(i-1)))/((hh(i+1)-hh(i-1))/2.0))*dt
+	vwind(i) = vwind(i) + (-fcor *(uwind(i) - ug) + (km(i+1) * (vwind(i+1) - vwind(i))/(hh(i+1)-hh(i)) - km(i) * (vwind(i)-vwind(i-1))/(hh(i)-hh(i-1)))/((hh(i+1)-hh(i-1))/2.0))*dt
+	theta(i) = theta(i) + ((kh(i+1) * (theta(i+1) - theta(i))/(hh(i+1)-hh(i)) - kh(i) * (theta(i)-theta(i-1))/(hh(i)-hh(i-1)))/((hh(i+1)-hh(i-1))/2.0))*dt
+	!write(*,*) uwind
+  end do
+  
   !---------------------------------------------------------------------------------------
   ! Emission
   !---------------------------------------------------------------------------------------
@@ -229,7 +244,6 @@ call close_files()
 
 ! Count total time steps
 write(*,*) counter,'time steps'
-
 
 contains
 
@@ -341,7 +355,7 @@ end subroutine time_init
 !-----------------------------------------------------------------------------------------
 subroutine meteorology_init()
   ! Wind velocity
-  uwind(1)         = 0.0d0
+  uwind(1)      = 0.0d0
   uwind(nz)     = ug
   uwind(2:nz-1) = uwind(nz) * hh(2:nz-1)/hh(nz)
 
