@@ -105,8 +105,9 @@ real(dp), dimension(nz  ) :: uwind, &  ! [m s-1], u component of wind
 real(dp), dimension(nz  ) :: temp, &   ! [K], air temperature
                              pres      ! [Pa], air pressure
 							 
-real(dp), dimension(nz  ) :: km,&	   ! 
-							 kh		   !						 
+real(dp), dimension(nz  ) :: km, &	   ! 
+							 kh, &	   !
+							 lba	   ! Blackadar
 
 
 integer :: i, j  ! used for loops
@@ -134,11 +135,13 @@ do while (time <= time_end)
   ! Set lower boundary condition
   call surface_values(theta(1), time+dt)  ! theta = temperature at the surface
 
-  ! version 1
-  km = 5.0
-  kh = 5.0
-  
-  ! Note:: here km(i+1) means km(i+0.5)
+  ! version 2 Note:: here km(i+1) means km(i+0.5) (calculated from wind(i+1)-wind(i))
+  do i = 2,nz
+	lba(i) = (vonk*hh(i))/(1.0 + (vonk*hh(i))/lambda)
+	km(i) = (lba(i)**2)*sqrt(((uwind(i)-uwind(i-1))/(hh(i)-hh(i-1)))**2 + ((vwind(i)-vwind(i-1))/(hh(i)-hh(i-1)))**2)
+	kh(i) = (lba(i)**2)*sqrt(((uwind(i)-uwind(i-1))/(hh(i)-hh(i-1)))**2 + ((vwind(i)-vwind(i-1))/(hh(i)-hh(i-1)))**2)
+  end do
+  ! 
   do i = 2,nz-1
 	uwind(i) = uwind(i) + (fcor *(vwind(i) - vg) + (km(i+1) * (uwind(i+1) - uwind(i))/(hh(i+1)-hh(i)) - km(i) * (uwind(i)-uwind(i-1))/(hh(i)-hh(i-1)))/((hh(i+1)-hh(i-1))/2.0))*dt
 	vwind(i) = vwind(i) + (-fcor *(uwind(i) - ug) + (km(i+1) * (vwind(i+1) - vwind(i))/(hh(i+1)-hh(i)) - km(i) * (vwind(i)-vwind(i-1))/(hh(i)-hh(i-1)))/((hh(i+1)-hh(i-1))/2.0))*dt
