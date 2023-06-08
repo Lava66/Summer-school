@@ -102,13 +102,18 @@ integer :: counter  ! [-], counter of time steps
 real(dp), dimension(nz  ) :: uwind, &  ! [m s-1], u component of wind
                              vwind, &  ! [m s-1], v component of wind
                              theta     ! [K], potential temperature
+real(dp), dimension(nz  ) :: uwind_old, &  ! [m s-1], old u component of wind
+                             vwind_old, &  ! [m s-1], old v component of wind
+                             theta_old     ! [K], old potential temperature							 
 real(dp), dimension(nz  ) :: temp, &   ! [K], air temperature
                              pres      ! [Pa], air pressure
 							 
 real(dp), dimension(nz  ) :: km, &	   ! 
 							 kh, &	   !
-							 lba	   ! Blackadar
-
+							 lmx,& 	   ! mixing length
+							 Ri, & 	   ! Richardson number
+							 fm, & 	   ! for momentum
+							 fh		   ! for heat and other scalars
 
 integer :: i, j  ! used for loops
 
@@ -135,17 +140,33 @@ do while (time <= time_end)
   ! Set lower boundary condition
   call surface_values(theta(1), time+dt)  ! theta = temperature at the surface
 
-  ! version 2 Note:: here km(i+1) means km(i+0.5) (calculated from wind(i+1)-wind(i))
-  do i = 2,nz
-	lba(i) = (vonk*hh(i))/(1.0 + (vonk*hh(i))/lambda)
-	km(i) = (lba(i)**2)*sqrt(((uwind(i)-uwind(i-1))/(hh(i)-hh(i-1)))**2 + ((vwind(i)-vwind(i-1))/(hh(i)-hh(i-1)))**2)
-	kh(i) = (lba(i)**2)*sqrt(((uwind(i)-uwind(i-1))/(hh(i)-hh(i-1)))**2 + ((vwind(i)-vwind(i-1))/(hh(i)-hh(i-1)))**2)
+  ! version 3 Note:: here km(i+1) means km(i+1.5) (calculated from wind(i+2)-wind(i+1))
+  uwind_old = uwind
+  vwind_old = vwind
+  theta_old = theta
+  
+  do i = 1,nz-1
+	lmx(i) = (vonk*(hh(i+1)+hh(i))/2.0)/(1.0 + (vonk*(hh(i+1)+hh(i))/2.0/lambda))
+	Ri(i) = grav/((theta(i+1)+theta(i))/2.0)*(theta(i+1)-theta(i))/((uwind(i+1)-uwind(i))**2+(vwind(i+1)-vwind(i))**2)*(hh(i+1)-hh(i))
+	if (Ri(i)<=0) then
+		fm(i) = (1.0-16.0d0*Ri(i))**(1.0d0/2.0d0)
+		fh(i) = (1.0-16.0d0*Ri(i))**(3.0d0/4.0d0)
+	elseif (Ri(i)<0.2) then
+		fm(i) = max((1.0d0-5.0*Ri(i))**2.0d0,0.1)
+		fh(i) = max((1.0d0-5.0*Ri(i))**2.0d0,0.1)
+	else
+		fm(i) = 0.1
+		fh(i) = 0.1
+		
+	end if
+	km(i) = (lmx(i)**2)*sqrt(((uwind(i+1)-uwind(i))/(hh(i+1)-hh(i)))**2 + ((vwind(i+1)-vwind(i))/(hh(i+1)-hh(i)))**2)*fm(i)
+	kh(i) = (lmx(i)**2)*sqrt(((uwind(i+1)-uwind(i))/(hh(i+1)-hh(i)))**2 + ((vwind(i+1)-vwind(i))/(hh(i+1)-hh(i)))**2)*fh(i)
   end do
   ! 
   do i = 2,nz-1
-	uwind(i) = uwind(i) + (fcor *(vwind(i) - vg) + (km(i+1) * (uwind(i+1) - uwind(i))/(hh(i+1)-hh(i)) - km(i) * (uwind(i)-uwind(i-1))/(hh(i)-hh(i-1)))/((hh(i+1)-hh(i-1))/2.0))*dt
-	vwind(i) = vwind(i) + (-fcor *(uwind(i) - ug) + (km(i+1) * (vwind(i+1) - vwind(i))/(hh(i+1)-hh(i)) - km(i) * (vwind(i)-vwind(i-1))/(hh(i)-hh(i-1)))/((hh(i+1)-hh(i-1))/2.0))*dt
-	theta(i) = theta(i) + ((kh(i+1) * (theta(i+1) - theta(i))/(hh(i+1)-hh(i)) - kh(i) * (theta(i)-theta(i-1))/(hh(i)-hh(i-1)))/((hh(i+1)-hh(i-1))/2.0))*dt
+	uwind(i) = uwind_old(i) + (fcor *(vwind_old(i) - vg) + (km(i) * (uwind_old(i+1) - uwind_old(i))/(hh(i+1)-hh(i)) - km(i-1) * (uwind_old(i)-uwind_old(i-1))/(hh(i)-hh(i-1)))/((hh(i+1)-hh(i-1))/2.0))*dt
+	vwind(i) = vwind_old(i) + (-fcor *(uwind_old(i) - ug) + (km(i) * (vwind_old(i+1) - vwind_old(i))/(hh(i+1)-hh(i)) - km(i-1) * (vwind_old(i)-vwind_old(i-1))/(hh(i)-hh(i-1)))/((hh(i+1)-hh(i-1))/2.0))*dt
+	theta(i) = theta_old(i) + ((kh(i) * (theta_old(i+1) - theta_old(i))/(hh(i+1)-hh(i)) - kh(i-1) * (theta_old(i)-theta_old(i-1))/(hh(i)-hh(i-1)))/((hh(i+1)-hh(i-1))/2.0))*dt
 	!write(*,*) uwind
   end do
   
